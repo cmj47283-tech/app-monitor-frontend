@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>App Monitor (Supabase + Vercel)</title>
+
+  <!--
+    IMPORTANT:
+    - This file expects Vercel to inject environment variables at build time.
+    - In Vercel, set two Environment Variables (Project > Settings > Environment Variables):
+        SUPABASE_URL  -> your Supabase project URL (eg. https://xyz.supabase.co)
+        SUPABASE_PUBLIC_KEY -> your anon/public API key
+    - The placeholders below are intentionally left as template strings:
+        "{{ SUPABASE_URL }}" and "{{ SUPABASE_PUBLIC_KEY }}"
+      Vercel will replace them if you configure your deployment to perform replacement,
+      or you can replace them manually before deploying.
+  -->
+
+  <!-- Supabase JS client (v2) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/supabase.min.js"></script>
+
+  <!-- Inline script where Vercel will inject environment values.
+       If you prefer not to inject at build-time, replace the template strings
+       with your actual values (NOT recommended for production). -->
+  <script>
+    // window.env holds configuration used by the app code below.
+    // Replace the {{ ... }} placeholders with actual values by environment replacement.
+    window.env = {
+      SUPABASE_URL: "{{ https://sbmejkwmkpdaokvqkwnv.supabase.co }}",            // e.g. "https://xyz.supabase.co"
+      SUPABASE_PUBLIC_KEY: "{{ eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNibWVqa3dta3BkYW9rdnFrd252Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1OTU1OTAsImV4cCI6MjA4MDE3MTU5MH0.sWKZ7ePFp7_exkYioRHOkG8KYFtCouJr7ba-tV4iKy0 }}" // anon public key
+    };
+  </script>
+
+  <style>
+    /* Simple styles to make table readable and statuses visible */
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; padding: 20px; }
+    .container { max-width: 980px; margin: 0 auto; }
+    input { padding: 8px; margin: 6px 4px; }
+    button { padding: 8px 12px; margin: 6px 4px; cursor: pointer; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { border: 1px solid #e6e6e6; padding: 8px; text-align: left; }
+    th { background: #f7f7f7; }
+    .status-active { color: #0a7f3b; font-weight: 700; } /* green */
+    .status-removed { color: #c23b3b; font-weight: 700; } /* red */
+    .status-unknown { color: #777; }
+    .small { font-size: 0.9rem; color: #666; }
+    .row-note { width: 260px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <h1>App Monitor (Supabase)</h1>
+    <p class="small">
+      Login with email/password (Supabase Auth). After login you can add package names to monitor,
+      add a note, delete entries and view the last known status and timestamps.
+    </p>
+
+    <!-- ===== AUTH FORM =====
+         This block is shown when the user is not authenticated.
+         It contains simple email/password inputs and buttons for signup/login.
+    -->
+    <div id="auth-area">
+      <h2>Sign in / Sign up</h2>
+      <!-- Email input -->
+      <input id="email" type="email" placeholder="Email" aria-label="email" />
+      <!-- Password input -->
+      <input id="password" type="password" placeholder="Password" aria-label="password" />
+
+      <!-- Buttons -->
+      <div>
+        <button id="signupBtn">Sign up</button>
+        <button id="loginBtn">Sign in</button>
+      </div>
+
+      <!-- Feedback message for auth errors/success -->
+      <p id="auth-msg" class="small" role="status" aria-live="polite"></p>
+    </div>
+
+    <!-- ===== APP MANAGEMENT AREA =====
+         This block is shown after successful auth.
+         It allows adding packages, listing user apps, editing notes, deleting entries.
+    -->
+    <div id="app-area" style="display:none;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h2>Your monitored apps</h2>
+        <div>
+          <button id="logoutBtn">Sign out</button>
+        </div>
+      </div>
+
+      <!-- Add new app form -->
+      <div id="add-form" style="margin-top:10px;">
+        <!-- package input -->
+        <input id="pkgInput" placeholder="Package name e.g. com.example.app" aria-label="package name" />
+        <!-- optional note -->
+        <input id="noteInput" placeholder="Note (optional)" aria-label="note" />
+        <button id="addBtn">Add app</button>
+      </div>
+
+      <!-- Table showing the user's apps.
+           Columns:
+           - package_name: the Android package name (unique per user's entry)
+           - first_seen: when we first observed the app live (filled by Edge Function)
+           - removed_at: timestamp when app was first detected removed (filled by Edge Function)
+           - dev_banned_at: developer account ban time (if detected)
+           - status: current status (active/removed/unknown)
+           - note: user editable
+           - actions: delete
+      -->
+      <table id="appsTable" aria-live="polite">
+        <thead>
+          <tr>
+            <th>Package</th>
+            <th>First seen</th>
+            <th>Removed at</th>
+            <th>Dev banned</th>
+            <th>Status</th>
+            <th class="row-note">Note</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="appsBody">
+          <!-- rows populated dynamically by JS -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Small footer/instructions -->
+    <p class="small" style="margin-top:12px;">
+      Notes:
+      <ol>
+        <li>The Edge Function (server-side) must be set up in Supabase to check Google Play every 30 minutes and update timestamps and status fields.</li>
+        <li>Set up Row Level Security (RLS) policies to ensure users can only read/write their own rows (recommended).</li>
+      </ol>
+    </p>
+  </div>
+
+  <!-- ===== Application logic =====
+       The script initializes the Supabase client using window.env (injected by Vercel),
+       handles authentication, CRUD operations, and renders the table.
+  -->
+  <script>
+    // Initialize Supabase client from injected configuration (window.env).
+    // window.env must be provided (for example via a build-time replace on Vercel).
+    if (!window.env || !window.env.SUPABASE_URL || !window.env.SUPABASE_PUBLIC_KEY) {
+      // Show clear message so developer knows to configure env vars.
+      document.getElementById('auth-area').innerHTML = '<p style="color:crimson">Configuration missing: please set SUPABASE_URL and SUPABASE_PUBLIC_KEY in your environment (see README).</p>';
+      throw new Error('Supabase configuration missing (window.env).');
+    }
+
+    const SUPABASE_URL = window.env.SUPABASE_URL;
+    const SUPABASE_PUBLIC_KEY = window.env.SUPABASE_PUBLIC_KEY;
+
+    // Create a supabase client (public/anon key is used for client-side auth)
+    const supabase = supabaseJs.createClient(SUPABASE_URL, SUPABASE_PUBLIC_KEY);
+
+    // Utility: format timestamp or return empty string
+    function fmt(ts) {
+      if (!ts) return '';
+      try {
+        const d = new Date(ts);
+        return d.toLocaleString();
+      } catch (e) { return String(ts); }
+    }
+
+    // Renders apps table for the current user
+    async function renderApps() {
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) return;
+
+      // Fetch apps belonging to the current user (ensure RLS policies allow this)
+      const { data, error } = await supabase
+        .from('apps')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('fetch apps error', error);
+        return;
+      }
+
+      const tbody = document.getElementById('appsBody');
+      tbody.innerHTML = '';
+      for (const row of data) {
+        const tr = document.createElement('tr');
+
+        // Determine status class and label
+        const status = row.status || 'unknown';
+        let statusClass = 'status-unknown';
+        if (status === 'active' || status === 'live') statusClass = 'status-active';
+        if (status === 'removed' || status === 'down') statusClass = 'status-removed';
+
+        // Create note input element (inline editable)
+        const noteInput = document.createElement('input');
+        noteInput.value = row.note || '';
+        noteInput.style.width = '100%';
+        noteInput.onchange = async () => {
+          await supabase.from('apps').update({ note: noteInput.value }).eq('id', row.id);
+        };
+
+        tr.innerHTML = `
+          <td>${row.package_name}</td>
+          <td>${fmt(row.first_seen)}</td>
+          <td>${fmt(row.removed_at)}</td>
+          <td>${fmt(row.dev_banned_at)}</td>
+          <td class="${statusClass}">${status}</td>
+          <td></td>
+          <td></td>
+        `;
+        // append note input and delete button into respective cells
+        tr.querySelector('td:nth-child(6)').appendChild(noteInput);
+
+        const delBtn = document.createElement('button');
+        delBtn.textContent = 'Delete';
+        delBtn.onclick = async () => {
+          if (!confirm('Delete this app?')) return;
+          await supabase.from('apps').delete().eq('id', row.id);
+          await renderApps();
+        };
+        tr.querySelector('td:nth-child(7)').appendChild(delBtn);
+
+        tbody.appendChild(tr);
+      }
+    }
+
+    // Auth handlers
+    document.getElementById('signupBtn').addEventListener('click', async () => {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const { error } = await supabase.auth.signUp({ email, password });
+      const msg = document.getElementById('auth-msg');
+      if (error) { msg.textContent = 'Sign up error: ' + error.message; }
+      else { msg.textContent = 'Sign up success. Check your email to confirm.'; }
+    });
+
+    document.getElementById('loginBtn').addEventListener('click', async () => {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const msg = document.getElementById('auth-msg');
+      if (error) { msg.textContent = 'Sign in error: ' + error.message; return; }
+      // On successful sign-in show app area
+      document.getElementById('auth-area').style.display = 'none';
+      document.getElementById('app-area').style.display = 'block';
+      await renderApps();
+    });
+
+    // Logout button
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      await supabase.auth.signOut();
+      document.getElementById('app-area').style.display = 'none';
+      document.getElementById('auth-area').style.display = 'block';
+    });
+
+    // Add app button
+    document.getElementById('addBtn').addEventListener('click', async () => {
+      const pkg = document.getElementById('pkgInput').value.trim();
+      const note = document.getElementById('noteInput').value.trim();
+      if (!pkg) { alert('Please enter a package name'); return; }
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) { alert('Not signed in'); return; }
+
+      // Insert row with initial empty timestamps; Edge Function will fill them during checks.
+      await supabase.from('apps').insert({
+        user_id: user.id,
+        package_name: pkg,
+        note: note,
+        status: 'unknown'
+      });
+
+      document.getElementById('pkgInput').value = '';
+      document.getElementById('noteInput').value = '';
+      await renderApps();
+    });
+
+    // Refresh table when auth state changes (e.g., page reload, login via magic link)
+    supabase.auth.onAuthStateChange((event, session) => {
+      if (session && session.user) {
+        document.getElementById('auth-area').style.display = 'none';
+        document.getElementById('app-area').style.display = 'block';
+        renderApps();
+      } else {
+        document.getElementById('auth-area').style.display = 'block';
+        document.getElementById('app-area').style.display = 'none';
+      }
+    });
+
+    // Initial check: if user already has session, show app area
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (data.session && data.session.user) {
+        document.getElementById('auth-area').style.display = 'none';
+        document.getElementById('app-area').style.display = 'block';
+        await renderApps();
+      }
+    })();
+  </script>
+</body>
+</html>
