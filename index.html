@@ -1,71 +1,93 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>App Monitor - Core</title>
+  <meta charset="UTF-8" />
+  <title>App Monitor</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/supabase.min.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; }
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; padding: 20px; }
+    .container { max-width: 1200px; margin: 0 auto; }
     input { padding: 6px; margin: 4px; }
-    button { padding: 6px 10px; margin: 4px; cursor: pointer; }
+    button { padding: 6px 12px; margin: 4px; cursor: pointer; }
     table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-    th, td { border: 1px solid #ccc; padding: 8px; }
-    th { background: #f0f0f0; }
-    .status-active { color: green; font-weight: bold; }
-    .status-removed { color: red; font-weight: bold; }
-    .status-unknown { color: gray; }
+    th, td { border: 1px solid #e6e6e6; padding: 6px; text-align: left; }
+    th { background: #f7f7f7; }
+    .status-active { color: #0a7f3b; font-weight: 700; }
+    .status-removed { color: #c23b3b; font-weight: 700; }
+    .status-unknown { color: #777; }
+    .row-note { width: 200px; }
   </style>
 </head>
 <body>
+<div class="container">
+  <h1>App Monitor</h1>
 
-<h1>App Monitor - Core</h1>
+  <div id="add-form">
+    <input id="pkgInput" placeholder="Package name e.g. com.example.app" />
+    <input id="noteInput" placeholder="Note (optional)" />
+    <button id="addBtn">Add App</button>
+  </div>
 
-<div id="add-form">
-  <input id="pkgInput" placeholder="Package name e.g. com.example.app" />
-  <input id="noteInput" placeholder="Note (optional)" />
-  <button id="addBtn">Add App</button>
+  <table>
+    <thead>
+      <tr>
+        <th>Package</th>
+        <th>Created at</th>
+        <th>First seen</th>
+        <th>Last checked</th>
+        <th>Removed at</th>
+        <th>Dev ID</th>
+        <th>Dev banned at</th>
+        <th>Status</th>
+        <th class="row-note">Note</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="appsBody"></tbody>
+  </table>
 </div>
 
-<table>
-  <thead>
-    <tr>
-      <th>Package</th>
-      <th>First Seen</th>
-      <th>Removed At</th>
-      <th>Dev Banned</th>
-      <th>Status</th>
-      <th>Note</th>
-      <th>Actions</th>
-    </tr>
-  </thead>
-  <tbody id="appsBody"></tbody>
-</table>
-
 <script>
-  // 配置 Supabase
+  // ==========================
+  // Supabase 初始化
+  // ==========================
   const SUPABASE_URL = "https://sbmejkwmkpdaokvqkwnv.supabase.co";
-  const SUPABASE_PUBLIC_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNibWVqa3dta3BkYW9rdnFrd252Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1OTU1OTAsImV4cCI6MjA4MDE3MTU5MH0.sWKZ7ePFp7_exkYioRHOkG8KYFtCouJr7ba-tV4iKy0";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNibWVqa3dta3BkYW9rdnFrd252Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1OTU1OTAsImV4cCI6MjA4MDE3MTU5MH0.sWKZ7ePFp7_exkYioRHOkG8KYFtCouJr7ba-tV4iKy0";
+  const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLIC_KEY);
-
+  // ==========================
+  // 工具函数
+  // ==========================
   function fmt(ts) {
     if (!ts) return '';
-    try { return new Date(ts).toLocaleString(); } catch(e) { return ts; }
+    try { return new Date(ts).toLocaleString(); } 
+    catch(e) { return String(ts); }
   }
 
+  // ==========================
+  // 渲染 apps
+  // ==========================
   async function renderApps() {
-    const { data, error } = await supabase.from('apps').select('*').order('created_at', { ascending: false });
-    if (error) { console.error('Error fetching apps:', error); return; }
+    const { data, error } = await supabase
+      .from('apps')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('fetch apps error', error);
+      return;
+    }
 
     const tbody = document.getElementById('appsBody');
     tbody.innerHTML = '';
 
-    data.forEach(row => {
+    for (const row of data) {
       const tr = document.createElement('tr');
 
+      let status = row.status || 'unknown';
       let statusClass = 'status-unknown';
-      if (row.status === 'active' || row.status === 'live') statusClass = 'status-active';
-      if (row.status === 'removed' || row.status === 'down') statusClass = 'status-removed';
+      if (status === 'active' || status === 'live') statusClass = 'status-active';
+      if (status === 'removed' || status === 'down') statusClass = 'status-removed';
 
       const noteInput = document.createElement('input');
       noteInput.value = row.note || '';
@@ -76,43 +98,55 @@
 
       tr.innerHTML = `
         <td>${row.package_name}</td>
+        <td>${fmt(row.created_at)}</td>
         <td>${fmt(row.first_seen)}</td>
+        <td>${fmt(row.last_checked)}</td>
         <td>${fmt(row.removed_at)}</td>
+        <td>${row.dev_id || ''}</td>
         <td>${fmt(row.dev_banned_at)}</td>
-        <td class="${statusClass}">${row.status || 'unknown'}</td>
+        <td class="${statusClass}">${status}</td>
         <td></td>
         <td></td>
       `;
-
-      tr.querySelector('td:nth-child(6)').appendChild(noteInput);
+      tr.querySelector('td:nth-child(9)').appendChild(noteInput);
 
       const delBtn = document.createElement('button');
       delBtn.textContent = 'Delete';
       delBtn.onclick = async () => {
         if (!confirm('Delete this app?')) return;
         await supabase.from('apps').delete().eq('id', row.id);
-        renderApps();
+        await renderApps();
       };
-      tr.querySelector('td:nth-child(7)').appendChild(delBtn);
+      tr.querySelector('td:nth-child(10)').appendChild(delBtn);
 
       tbody.appendChild(tr);
-    });
+    }
   }
 
+  // ==========================
+  // 添加 app
+  // ==========================
   document.getElementById('addBtn').addEventListener('click', async () => {
     const pkg = document.getElementById('pkgInput').value.trim();
     const note = document.getElementById('noteInput').value.trim();
     if (!pkg) { alert('Please enter a package name'); return; }
 
-    await supabase.from('apps').insert({ package_name: pkg, note: note, status: 'unknown' });
+    await supabase.from('apps').insert({
+      package_name: pkg,
+      note: note,
+      status: 'unknown',
+      created_at: new Date()
+    });
+
     document.getElementById('pkgInput').value = '';
     document.getElementById('noteInput').value = '';
-    renderApps();
+    await renderApps();
   });
 
-  // 页面加载时渲染表格
+  // ==========================
+  // 初始渲染
+  // ==========================
   renderApps();
 </script>
-
 </body>
 </html>
