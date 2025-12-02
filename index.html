@@ -2,24 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>App Monitor (Supabase + Vercel)</title>
-
-  <!-- Supabase JS client (v2) -->
+  <title>App Monitor (Supabase)</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/supabase.min.js"></script>
-
-  <!-- Inline script for environment variables -->
-  <script>
-    window.env = {
-      SUPABASE_URL: "https://sbmejkwmkpdaokvqkwnv.supabase.co",
-      SUPABASE_PUBLIC_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNibWVqa3dta3BkYW9rdnFrd252Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1OTU1OTAsImV4cCI6MjA4MDE3MTU5MH0.sWKZ7ePFp7_exkYioRHOkG8KYFtCouJr7ba-tV4iKy0"
-    };
-  </script>
-
   <style>
     body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; padding: 20px; }
     .container { max-width: 980px; margin: 0 auto; }
-    input { padding: 8px; margin: 6px 4px; }
-    button { padding: 8px 12px; margin: 6px 4px; cursor: pointer; }
+    input, button { padding: 8px; margin: 6px 4px; }
     table { width: 100%; border-collapse: collapse; margin-top: 12px; }
     th, td { border: 1px solid #e6e6e6; padding: 8px; text-align: left; }
     th { background: #f7f7f7; }
@@ -31,202 +19,183 @@
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>App Monitor (Supabase)</h1>
-    <p class="small">
-      Login with email/password (Supabase Auth). After login you can add package names to monitor,
-      add a note, delete entries and view the last known status and timestamps.
-    </p>
+<div class="container">
+  <h1>App Monitor (Supabase)</h1>
+  <p class="small">
+    Login with email/password. After login you can add package names to monitor,
+    add a note, delete entries and view the last known status and timestamps.
+  </p>
 
-    <div id="auth-area">
-      <h2>Sign in / Sign up</h2>
-      <input id="email" type="email" placeholder="Email" aria-label="email" />
-      <input id="password" type="password" placeholder="Password" aria-label="password" />
-      <div>
-        <button id="signupBtn">Sign up</button>
-        <button id="loginBtn">Sign in</button>
-      </div>
-      <p id="auth-msg" class="small" role="status" aria-live="polite"></p>
+  <div id="auth-area">
+    <h2>Sign in / Sign up</h2>
+    <input id="email" type="email" placeholder="Email" />
+    <input id="password" type="password" placeholder="Password" />
+    <div>
+      <button id="signupBtn">Sign up</button>
+      <button id="loginBtn">Sign in</button>
     </div>
-
-    <div id="app-area" style="display:none;">
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <h2>Your monitored apps</h2>
-        <div>
-          <button id="logoutBtn">Sign out</button>
-        </div>
-      </div>
-
-      <div id="add-form" style="margin-top:10px;">
-        <input id="pkgInput" placeholder="Package name e.g. com.example.app" aria-label="package name" />
-        <input id="noteInput" placeholder="Note (optional)" aria-label="note" />
-        <button id="addBtn">Add app</button>
-      </div>
-
-      <table id="appsTable" aria-live="polite">
-        <thead>
-          <tr>
-            <th>Package</th>
-            <th>First seen</th>
-            <th>Removed at</th>
-            <th>Dev banned</th>
-            <th>Status</th>
-            <th class="row-note">Note</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="appsBody"></tbody>
-      </table>
-    </div>
-
-    <p class="small" style="margin-top:12px;">
-      Notes:
-      <ol>
-        <li>The Edge Function (server-side) must be set up in Supabase to check Google Play every 30 minutes and update timestamps and status fields.</li>
-        <li>Set up Row Level Security (RLS) policies to ensure users can only read/write their own rows (recommended).</li>
-      </ol>
-    </p>
+    <p id="auth-msg" class="small"></p>
   </div>
 
-  <script>
-    if (!window.env || !window.env.SUPABASE_URL || !window.env.SUPABASE_PUBLIC_KEY) {
-      document.getElementById('auth-area').innerHTML =
-        '<p style="color:crimson">Configuration missing: please set SUPABASE_URL and SUPABASE_PUBLIC_KEY in your environment (see README).</p>';
-      throw new Error('Supabase configuration missing.');
-    }
+  <div id="app-area" style="display:none;">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h2>Your monitored apps</h2>
+      <button id="logoutBtn">Sign out</button>
+    </div>
 
-    const SUPABASE_URL = window.env.SUPABASE_URL;
-    const SUPABASE_PUBLIC_KEY = window.env.SUPABASE_PUBLIC_KEY;
+    <div id="add-form" style="margin-top:10px;">
+      <input id="pkgInput" placeholder="Package name e.g. com.example.app" />
+      <input id="noteInput" placeholder="Note (optional)" />
+      <button id="addBtn">Add app</button>
+    </div>
 
-    // 避免重复声明 supabase
-    if (!window.supabase) {
-      window.supabase = supabaseJs.createClient(SUPABASE_URL, SUPABASE_PUBLIC_KEY);
-    }
-    const supabase = window.supabase;
+    <table id="appsTable" aria-live="polite">
+      <thead>
+        <tr>
+          <th>Package</th>
+          <th>First seen</th>
+          <th>Removed at</th>
+          <th>Dev banned</th>
+          <th>Status</th>
+          <th class="row-note">Note</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="appsBody"></tbody>
+    </table>
+  </div>
+</div>
 
-    function fmt(ts) {
-      if (!ts) return '';
-      try { return new Date(ts).toLocaleString(); } 
-      catch(e) { return String(ts); }
-    }
+<script>
+  const SUPABASE_URL = "https://sbmejkwmkpdaokvqkwnv.supabase.co";
+  const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNibWVqa3dta3BkYW9rdnFrd252Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1OTU1OTAsImV4cCI6MjA4MDE3MTU5MH0.sWKZ7ePFp7_exkYioRHOkG8KYFtCouJr7ba-tV4iKy0";
 
-    async function renderApps() {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) return;
+  // 初始化 Supabase 客户端
+  const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-      const { data, error } = await supabase
-        .from('apps')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+  const authMsg = document.getElementById('auth-msg');
+  const authArea = document.getElementById('auth-area');
+  const appArea = document.getElementById('app-area');
 
-      if (error) return console.error('fetch apps error', error);
+  function fmt(ts) {
+    if (!ts) return '';
+    try { return new Date(ts).toLocaleString(); } 
+    catch(e) { return String(ts); }
+  }
 
-      const tbody = document.getElementById('appsBody');
-      tbody.innerHTML = '';
+  async function renderApps() {
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    if (!user) return;
 
-      for (const row of data) {
-        const tr = document.createElement('tr');
-        let status = row.status || 'unknown';
-        let statusClass = 'status-unknown';
-        if (status === 'active' || status === 'live') statusClass = 'status-active';
-        if (status === 'removed' || status === 'down') statusClass = 'status-removed';
+    const { data, error } = await supabaseClient
+      .from('apps')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
 
-        const noteInput = document.createElement('input');
-        noteInput.value = row.note || '';
-        noteInput.style.width = '100%';
-        noteInput.onchange = async () => {
-          await supabase.from('apps').update({ note: noteInput.value }).eq('id', row.id);
-        };
+    if (error) return console.error(error);
 
-        tr.innerHTML = `
-          <td>${row.package_name}</td>
-          <td>${fmt(row.first_seen)}</td>
-          <td>${fmt(row.removed_at)}</td>
-          <td>${fmt(row.dev_banned_at)}</td>
-          <td class="${statusClass}">${status}</td>
-          <td></td>
-          <td></td>
-        `;
-        tr.querySelector('td:nth-child(6)').appendChild(noteInput);
+    const tbody = document.getElementById('appsBody');
+    tbody.innerHTML = '';
 
-        const delBtn = document.createElement('button');
-        delBtn.textContent = 'Delete';
-        delBtn.onclick = async () => {
-          if (!confirm('Delete this app?')) return;
-          await supabase.from('apps').delete().eq('id', row.id);
-          await renderApps();
-        };
-        tr.querySelector('td:nth-child(7)').appendChild(delBtn);
+    for (const row of data) {
+      const tr = document.createElement('tr');
+      let statusClass = 'status-unknown';
+      const status = row.status || 'unknown';
+      if (status === 'active' || status === 'live') statusClass = 'status-active';
+      if (status === 'removed' || status === 'down') statusClass = 'status-removed';
 
-        tbody.appendChild(tr);
-      }
-    }
+      const noteInput = document.createElement('input');
+      noteInput.value = row.note || '';
+      noteInput.style.width = '100%';
+      noteInput.onchange = async () => {
+        await supabaseClient.from('apps').update({ note: noteInput.value }).eq('id', row.id);
+      };
 
-    document.getElementById('signupBtn').addEventListener('click', async () => {
-      const email = document.getElementById('email').value;
-      const password = document.getElementById('password').value;
-      const { error } = await supabase.auth.signUp({ email, password });
-      const msg = document.getElementById('auth-msg');
-      msg.textContent = error ? 'Sign up error: ' + error.message : 'Sign up success. Check your email.';
-    });
+      tr.innerHTML = `
+        <td>${row.package_name}</td>
+        <td>${fmt(row.first_seen)}</td>
+        <td>${fmt(row.removed_at)}</td>
+        <td>${fmt(row.dev_banned_at)}</td>
+        <td class="${statusClass}">${status}</td>
+        <td></td>
+        <td></td>
+      `;
+      tr.querySelector('td:nth-child(6)').appendChild(noteInput);
 
-    document.getElementById('loginBtn').addEventListener('click', async () => {
-      const email = document.getElementById('email').value;
-      const password = document.getElementById('password').value;
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      const msg = document.getElementById('auth-msg');
-      if (error) { msg.textContent = 'Sign in error: ' + error.message; return; }
-      document.getElementById('auth-area').style.display = 'none';
-      document.getElementById('app-area').style.display = 'block';
-      await renderApps();
-    });
-
-    document.getElementById('logoutBtn').addEventListener('click', async () => {
-      await supabase.auth.signOut();
-      document.getElementById('app-area').style.display = 'none';
-      document.getElementById('auth-area').style.display = 'block';
-    });
-
-    document.getElementById('addBtn').addEventListener('click', async () => {
-      const pkg = document.getElementById('pkgInput').value.trim();
-      const note = document.getElementById('noteInput').value.trim();
-      if (!pkg) { alert('Please enter a package name'); return; }
-
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) { alert('Not signed in'); return; }
-
-      await supabase.from('apps').insert({
-        user_id: user.id,
-        package_name: pkg,
-        note: note,
-        status: 'unknown'
-      });
-
-      document.getElementById('pkgInput').value = '';
-      document.getElementById('noteInput').value = '';
-      await renderApps();
-    });
-
-    supabase.auth.onAuthStateChange((event, session) => {
-      if (session && session.user) {
-        document.getElementById('auth-area').style.display = 'none';
-        document.getElementById('app-area').style.display = 'block';
+      const delBtn = document.createElement('button');
+      delBtn.textContent = 'Delete';
+      delBtn.onclick = async () => {
+        if (!confirm('Delete this app?')) return;
+        await supabaseClient.from('apps').delete().eq('id', row.id);
         renderApps();
-      } else {
-        document.getElementById('auth-area').style.display = 'block';
-        document.getElementById('app-area').style.display = 'none';
-      }
+      };
+      tr.querySelector('td:nth-child(7)').appendChild(delBtn);
+
+      tbody.appendChild(tr);
+    }
+  }
+
+  async function updateUI(user) {
+    if (user) {
+      authArea.style.display = 'none';
+      appArea.style.display = 'block';
+      await renderApps();
+    } else {
+      authArea.style.display = 'block';
+      appArea.style.display = 'none';
+    }
+  }
+
+  document.getElementById('signupBtn').addEventListener('click', async () => {
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+    const { error } = await supabaseClient.auth.signUp({ email, password });
+    authMsg.textContent = error ? 'Sign up error: ' + error.message : 'Sign up successful! Check your email.';
+  });
+
+  document.getElementById('loginBtn').addEventListener('click', async () => {
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    if (error) { authMsg.textContent = 'Sign in error: ' + error.message; return; }
+    authMsg.textContent = '';
+    await updateUI(data.user);
+  });
+
+  document.getElementById('logoutBtn').addEventListener('click', async () => {
+    await supabaseClient.auth.signOut();
+    await updateUI(null);
+  });
+
+  document.getElementById('addBtn').addEventListener('click', async () => {
+    const pkg = document.getElementById('pkgInput').value.trim();
+    const note = document.getElementById('noteInput').value.trim();
+    if (!pkg) return alert('Enter package name');
+
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    if (!user) return alert('Not signed in');
+
+    await supabaseClient.from('apps').insert({
+      user_id: user.id,
+      package_name: pkg,
+      note,
+      status: 'unknown'
     });
 
-    (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session && data.session.user) {
-        document.getElementById('auth-area').style.display = 'none';
-        document.getElementById('app-area').style.display = 'block';
-        await renderApps();
-      }
-    })();
-  </script>
+    document.getElementById('pkgInput').value = '';
+    document.getElementById('noteInput').value = '';
+    await renderApps();
+  });
+
+  supabaseClient.auth.onAuthStateChange((_event, session) => {
+    updateUI(session?.user || null);
+  });
+
+  (async () => {
+    const { data } = await supabaseClient.auth.getSession();
+    updateUI(data.session?.user || null);
+  })();
+</script>
 </body>
 </html>
