@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <title>App Monitor</title>
 
-<!-- Supabase v2 CDN: must load before we call supabase.createClient -->
+<!-- Supabase v2 CDN -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/supabase.min.js"></script>
 
 <style>
@@ -53,49 +53,47 @@ th { background: #f7f7f7; }
 </div>
 
 <script>
-/*
-  修正后的前端：
-  - 全部使用 supabaseClient（不会覆盖全局 supabase）
-  - 在 CDN 加载后再初始化
-  - 对错误进行友好提示
-*/
-
-// 配置（请确认这些值与你的项目一致）
+/* --- 配置 Supabase --- */
 const SUPABASE_URL = "https://sbmejkwmkpdaokvqkwnv.supabase.co";
 const SUPABASE_PUBLIC_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNibWVqa3dta3BkYW9rdnFrd252Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1OTU1OTAsImV4cCI6MjA4MDE3MTU5MH0.sWKZ7ePFp7_exkYioRHOkG8KYFtCouJr7ba-tV4iKy0";
 
-// 确保全局 supabase 已加载（来自 CDN）
+// 确认库加载
 if (typeof supabase === 'undefined') {
-  document.body.innerHTML = '<div style="padding:20px;color:crimson">Error: Supabase JS library not loaded. Check CDN script include.</div>';
+  document.body.innerHTML = '<div style="padding:20px;color:crimson">Error: Supabase JS library not loaded.</div>';
   throw new Error('Supabase JS library not loaded.');
 }
 
-// 创建客户端实例（注意变量名不要叫 supabase）
+// 创建客户端
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLIC_KEY);
 
-// Helper: 安全格式化时间
+// 日期格式化
 function fmt(ts) {
   if (!ts) return '';
   try { return new Date(ts).toLocaleString(); }
-  catch (e) { return String(ts); }
+  catch(e) { return String(ts); }
 }
 
-// 渲染列表
+// 转义 HTML
+function escapeHtml(str) {
+  if (typeof str !== 'string') return str;
+  return str.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+// 渲染 apps 列表
 async function renderApps() {
   const { data, error } = await supabaseClient
     .from('apps')
     .select('*')
     .order('created_at', { ascending: false });
 
+  const tbody = document.getElementById('appsBody');
+  tbody.innerHTML = '';
+
   if (error) {
     console.error('Fetch apps error:', error);
-    const tbody = document.getElementById('appsBody');
     tbody.innerHTML = `<tr><td colspan="10" style="color:crimson">Error fetching apps: ${error.message}</td></tr>`;
     return;
   }
-
-  const tbody = document.getElementById('appsBody');
-  tbody.innerHTML = '';
 
   data.forEach(row => {
     const tr = document.createElement('tr');
@@ -105,23 +103,15 @@ async function renderApps() {
     if (status === 'active' || status === 'live') statusClass = 'status-active';
     if (status === 'removed' || status === 'down') statusClass = 'status-removed';
 
-    // note editable input
+    // note 可编辑
     const noteInput = document.createElement('input');
     noteInput.value = row.note || '';
     noteInput.style.width = '100%';
     noteInput.addEventListener('change', async () => {
-      const newVal = noteInput.value;
-      const { error: upErr } = await supabaseClient.from('apps').update({ note: newVal }).eq('id', row.id);
-      if (upErr) {
-        alert('Update note error: ' + upErr.message);
-        console.error(upErr);
-      } else {
-        // 可选择局部更新 UI，不必全部刷新
-        // renderApps();
-      }
+      const { error } = await supabaseClient.from('apps').update({ note: noteInput.value }).eq('id', row.id);
+      if (error) alert('Update note error: ' + error.message);
     });
 
-    // build row HTML (cells 1..10)
     tr.innerHTML = `
       <td>${escapeHtml(row.package_name)}</td>
       <td>${fmt(row.created_at)}</td>
@@ -134,22 +124,15 @@ async function renderApps() {
       <td></td>
       <td></td>
     `;
-
-    // 插入 note input 到第9列
     tr.querySelector('td:nth-child(9)').appendChild(noteInput);
 
-    // 删除按钮到第10列
     const delBtn = document.createElement('button');
     delBtn.textContent = 'Delete';
     delBtn.addEventListener('click', async () => {
       if (!confirm('Delete this app?')) return;
-      const { error: delErr } = await supabaseClient.from('apps').delete().eq('id', row.id);
-      if (delErr) {
-        alert('Delete error: ' + delErr.message);
-        console.error(delErr);
-      } else {
-        renderApps();
-      }
+      const { error } = await supabaseClient.from('apps').delete().eq('id', row.id);
+      if (error) alert('Delete error: ' + error.message);
+      else renderApps();
     });
     tr.querySelector('td:nth-child(10)').appendChild(delBtn);
 
@@ -166,7 +149,6 @@ document.getElementById('addBtn').addEventListener('click', async () => {
 
   if (!pkg) { alert('Please enter package name'); return; }
 
-  // 插入
   const { data, error } = await supabaseClient.from('apps').insert({
     package_name: pkg,
     note: note || null,
@@ -180,26 +162,15 @@ document.getElementById('addBtn').addEventListener('click', async () => {
     return;
   }
 
-  // 清空输入并刷新列表（局部追加也可）
   document.getElementById('pkgInput').value = '';
   document.getElementById('noteInput').value = '';
   msgEl.textContent = 'Added.';
-  setTimeout(()=> msgEl.textContent = '', 2000);
+  setTimeout(() => msgEl.textContent = '', 2000);
   renderApps();
 });
 
-// 防 XSS：简单转义（只用于展示）
-function escapeHtml(str) {
-  if (typeof str !== 'string') return str;
-  return str.replace(/[&<>"']/g, function(m) {
-    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m];
-  });
-}
-
-// 初始渲染（在下一轮事件循环，确保上面的绑定已完成）
-setTimeout(() => {
-  renderApps();
-}, 0);
+// 初始加载
+renderApps();
 </script>
 </body>
 </html>
