@@ -119,7 +119,7 @@ async function renderApps() {
       <td>${fmt(row.last_checked)}</td>
       <td>${fmt(row.removed_at)}</td>
       <td>${escapeHtml(row.dev_id || '')}</td>
-      <td>${fmt(row.dev_banned_at)}</td>
+      <td>${row.dev_banned_at ? fmt(row.dev_banned_at) + ' (Banned)' : 'Active'}</td>
       <td class="${statusClass}">${escapeHtml(status)}</td>
       <td></td>
       <td></td>
