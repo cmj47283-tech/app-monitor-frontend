@@ -2,8 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>App Monitor - Supabase Frontend</title>
+<title>App Monitor</title>
+
+<!-- Supabase v2 CDN: must load before we call supabase.createClient -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/supabase.min.js"></script>
+
 <style>
 body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial; padding: 20px; }
 .container { max-width: 1000px; margin: 0 auto; }
@@ -16,6 +19,7 @@ th { background: #f7f7f7; }
 .status-removed { color: #c23b3b; font-weight: 700; }
 .status-unknown { color: #777; }
 .row-note { width: 200px; }
+.small { color: #666; font-size: 0.9rem; }
 </style>
 </head>
 <body>
@@ -26,6 +30,7 @@ th { background: #f7f7f7; }
     <input id="pkgInput" placeholder="Package name e.g. com.example.app">
     <input id="noteInput" placeholder="Note (optional)">
     <button id="addBtn">Add App</button>
+    <span id="add-msg" class="small"></span>
   </div>
 
   <table>
@@ -34,7 +39,9 @@ th { background: #f7f7f7; }
         <th>Package</th>
         <th>Created At</th>
         <th>First Seen</th>
+        <th>Last Checked</th>
         <th>Removed At</th>
+        <th>Dev ID</th>
         <th>Dev Banned</th>
         <th>Status</th>
         <th class="row-note">Note</th>
@@ -46,27 +53,44 @@ th { background: #f7f7f7; }
 </div>
 
 <script>
-// ---------- Supabase 初始化 ----------
+/*
+  修正后的前端：
+  - 全部使用 supabaseClient（不会覆盖全局 supabase）
+  - 在 CDN 加载后再初始化
+  - 对错误进行友好提示
+*/
+
+// 配置（请确认这些值与你的项目一致）
 const SUPABASE_URL = "https://sbmejkwmkpdaokvqkwnv.supabase.co";
 const SUPABASE_PUBLIC_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNibWVqa3dta3BkYW9rdnFrd252Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1OTU1OTAsImV4cCI6MjA4MDE3MTU5MH0.sWKZ7ePFp7_exkYioRHOkG8KYFtCouJr7ba-tV4iKy0";
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLIC_KEY);
 
-// ---------- 格式化日期 ----------
+// 确保全局 supabase 已加载（来自 CDN）
+if (typeof supabase === 'undefined') {
+  document.body.innerHTML = '<div style="padding:20px;color:crimson">Error: Supabase JS library not loaded. Check CDN script include.</div>';
+  throw new Error('Supabase JS library not loaded.');
+}
+
+// 创建客户端实例（注意变量名不要叫 supabase）
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLIC_KEY);
+
+// Helper: 安全格式化时间
 function fmt(ts) {
   if (!ts) return '';
   try { return new Date(ts).toLocaleString(); }
-  catch(e) { return ts; }
+  catch (e) { return String(ts); }
 }
 
-// ---------- 渲染 apps 表 ----------
+// 渲染列表
 async function renderApps() {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseClient
     .from('apps')
     .select('*')
     .order('created_at', { ascending: false });
 
   if (error) {
-    console.error("Fetch apps error:", error);
+    console.error('Fetch apps error:', error);
+    const tbody = document.getElementById('appsBody');
+    tbody.innerHTML = `<tr><td colspan="10" style="color:crimson">Error fetching apps: ${error.message}</td></tr>`;
     return;
   }
 
@@ -76,70 +100,106 @@ async function renderApps() {
   data.forEach(row => {
     const tr = document.createElement('tr');
 
-    let statusClass = 'status-unknown';
     const status = row.status || 'unknown';
+    let statusClass = 'status-unknown';
     if (status === 'active' || status === 'live') statusClass = 'status-active';
     if (status === 'removed' || status === 'down') statusClass = 'status-removed';
 
+    // note editable input
     const noteInput = document.createElement('input');
     noteInput.value = row.note || '';
     noteInput.style.width = '100%';
-    noteInput.onchange = async () => {
-      await supabase.from('apps').update({ note: noteInput.value }).eq('id', row.id);
-      renderApps(); // 更新显示
-    };
+    noteInput.addEventListener('change', async () => {
+      const newVal = noteInput.value;
+      const { error: upErr } = await supabaseClient.from('apps').update({ note: newVal }).eq('id', row.id);
+      if (upErr) {
+        alert('Update note error: ' + upErr.message);
+        console.error(upErr);
+      } else {
+        // 可选择局部更新 UI，不必全部刷新
+        // renderApps();
+      }
+    });
 
+    // build row HTML (cells 1..10)
     tr.innerHTML = `
-      <td>${row.package_name}</td>
+      <td>${escapeHtml(row.package_name)}</td>
       <td>${fmt(row.created_at)}</td>
       <td>${fmt(row.first_seen)}</td>
+      <td>${fmt(row.last_checked)}</td>
       <td>${fmt(row.removed_at)}</td>
+      <td>${escapeHtml(row.dev_id || '')}</td>
       <td>${fmt(row.dev_banned_at)}</td>
-      <td class="${statusClass}">${status}</td>
+      <td class="${statusClass}">${escapeHtml(status)}</td>
       <td></td>
       <td></td>
     `;
-    tr.querySelector('td:nth-child(7)').appendChild(noteInput);
 
+    // 插入 note input 到第9列
+    tr.querySelector('td:nth-child(9)').appendChild(noteInput);
+
+    // 删除按钮到第10列
     const delBtn = document.createElement('button');
     delBtn.textContent = 'Delete';
-    delBtn.onclick = async () => {
-      if (!confirm("Delete this app?")) return;
-      await supabase.from('apps').delete().eq('id', row.id);
-      renderApps();
-    };
-    tr.querySelector('td:nth-child(8)').appendChild(delBtn);
+    delBtn.addEventListener('click', async () => {
+      if (!confirm('Delete this app?')) return;
+      const { error: delErr } = await supabaseClient.from('apps').delete().eq('id', row.id);
+      if (delErr) {
+        alert('Delete error: ' + delErr.message);
+        console.error(delErr);
+      } else {
+        renderApps();
+      }
+    });
+    tr.querySelector('td:nth-child(10)').appendChild(delBtn);
 
     tbody.appendChild(tr);
   });
 }
 
-// ---------- 添加 app ----------
+// 添加 app
 document.getElementById('addBtn').addEventListener('click', async () => {
   const pkg = document.getElementById('pkgInput').value.trim();
   const note = document.getElementById('noteInput').value.trim();
-  if (!pkg) { alert("Please enter package name"); return; }
+  const msgEl = document.getElementById('add-msg');
+  msgEl.textContent = '';
 
-  const { error } = await supabase.from('apps').insert({
+  if (!pkg) { alert('Please enter package name'); return; }
+
+  // 插入
+  const { data, error } = await supabaseClient.from('apps').insert({
     package_name: pkg,
-    note: note,
-    status: 'unknown'
-  });
+    note: note || null,
+    status: 'unknown',
+    created_at: new Date().toISOString()
+  }).select().single();
 
   if (error) {
-    alert("Add app error: " + error.message);
+    alert('Add app error: ' + error.message);
     console.error(error);
     return;
   }
 
+  // 清空输入并刷新列表（局部追加也可）
   document.getElementById('pkgInput').value = '';
   document.getElementById('noteInput').value = '';
+  msgEl.textContent = 'Added.';
+  setTimeout(()=> msgEl.textContent = '', 2000);
   renderApps();
 });
 
-// ---------- 页面初始加载 ----------
-renderApps();
+// 防 XSS：简单转义（只用于展示）
+function escapeHtml(str) {
+  if (typeof str !== 'string') return str;
+  return str.replace(/[&<>"']/g, function(m) {
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m];
+  });
+}
 
+// 初始渲染（在下一轮事件循环，确保上面的绑定已完成）
+setTimeout(() => {
+  renderApps();
+}, 0);
 </script>
 </body>
 </html>
