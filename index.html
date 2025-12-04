@@ -6,92 +6,41 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
-body { 
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial; 
-  padding: 20px; 
-  background: #f5f6fa; 
-  color: #333; 
-  margin: 0; 
-}
-
-.container { 
-  max-width: 1400px; 
-  margin: 0 auto; 
-}
-
+body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial; padding: 20px; background: #f5f6fa; color: #333; }
+.container { max-width: 1400px; margin: 0 auto; }
 h1 { margin-bottom: 16px; }
 
-input { 
-  padding: 6px 10px; 
-  margin: 4px; 
-  border-radius: 4px; 
-  border: 1px solid #ccc; 
-}
-
-button { 
-  padding: 6px 12px; 
-  margin: 4px; 
-  cursor: pointer; 
-  border-radius: 4px; 
-  border: none; 
-  background: #4CAF50; 
-  color: #fff; 
-  transition: 0.2s; 
-}
-
+input { padding: 6px 10px; margin: 4px; border-radius: 4px; border: 1px solid #ccc; }
+button { padding: 6px 12px; margin: 4px; cursor: pointer; border-radius: 4px; border: none; background: #4CAF50; color: #fff; transition: 0.2s; }
 button:hover { background: #45a049; }
 
-.table-wrapper { 
-  overflow-x: auto; 
-  background: #fff; 
-  padding: 10px; 
-  border-radius: 6px; 
-  box-shadow: 0 0 10px rgba(0,0,0,0.1); 
-  margin-top: 16px; 
-}
-
-table { 
-  width: 100%; 
-  border-collapse: collapse; 
-  table-layout: auto; 
-  min-width: 1000px; /* 保证小屏也能横向滚动 */
-}
-
-th, td { 
-  border: 1px solid #ccc; 
-  padding: 8px; 
-  text-align: left; 
-  vertical-align: top; 
-}
-
-th { 
-  background: #f0f0f0; 
-  font-weight: bold; 
-}
+.table-wrapper { overflow-x: auto; background: #fff; padding: 10px; border-radius: 10px; box-shadow: 0 0 8px rgba(0,0,0,0.1); margin-top: 16px; }
+table { width: 100%; border-collapse: collapse; table-layout: auto; }
+th, td { border: 1px solid #ccc; padding: 8px; text-align: left; vertical-align: top; white-space: nowrap; }
+th { background: #f0f0f0; font-weight: bold; position: relative; }
 
 .status-active { color: #0a7f3b; font-weight: 600; }
 .status-removed { color: #c23b3b; font-weight: 600; }
 .status-unknown { color: #777; }
 
-.row-note { 
-  white-space: pre-wrap; 
-  word-wrap: break-word; 
-  max-width: 300px; 
-}
-
-.button-delete { 
-  background: #d9534f; 
-}
-
-.button-delete:hover { 
-  background: #c9302c; 
-}
+.button-delete { background: #d9534f; }
+.button-delete:hover { background: #c9302c; }
 
 .small { color: #666; font-size: 0.9rem; }
 
-input.note-input { 
-  width: 100%; 
-  box-sizing: border-box; 
+/* ------------ 可拖动列宽 ------------ */
+th.resizable {
+  position: relative;
+}
+
+th.resizable .resizer {
+  width: 6px;
+  height: 100%;
+  position: absolute;
+  right: 0;
+  top: 0;
+  cursor: col-resize;
+  user-select: none;
 }
 </style>
 </head>
@@ -110,16 +59,16 @@ input.note-input {
 <table>
 <thead>
 <tr>
-<th>Package</th>
-<th>Created At</th>
-<th>First Seen</th>
-<th>Last Checked</th>
-<th>Removed At</th>
-<th>Dev ID</th>
-<th>Dev Banned</th>
-<th>Status</th>
-<th>Note</th>
-<th>Actions</th>
+<th class="resizable">Package<div class="resizer"></div></th>
+<th class="resizable">Created At<div class="resizer"></div></th>
+<th class="resizable">First Seen<div class="resizer"></div></th>
+<th class="resizable">Last Checked<div class="resizer"></div></th>
+<th class="resizable">Removed At<div class="resizer"></div></th>
+<th class="resizable">Dev ID<div class="resizer"></div></th>
+<th class="resizable">Dev Banned<div class="resizer"></div></th>
+<th class="resizable">Status<div class="resizer"></div></th>
+<th class="resizable">Note<div class="resizer"></div></th>
+<th class="resizable">Actions<div class="resizer"></div></th>
 </tr>
 </thead>
 <tbody id="appsBody"></tbody>
@@ -128,88 +77,129 @@ input.note-input {
 </div>
 
 <script>
-// 保留你原来的 Supabase 配置和逻辑
+// ------------------ IMPORTANT ------------------
+// 这里替换你的 Supabase URL 和 PUBLIC KEY（必须是英文引号）
 const SUPABASE_URL = "https://sbmejkwmkpdaokvqkwnv.supabase.co";
-const SUPABASE_PUBLIC_KEY = "你的公钥";
+const SUPABASE_PUBLIC_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNibWVqa3dta3BkYW9rdnFrd252Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1OTU1OTAsImV4cCI6MjA4MDE3MTU5MH0.sWKZ7ePFp7_exkYioRHOkG8KYFtCouJr7ba-tV4iKy0";
+// ------------------------------------------------
+
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLIC_KEY);
 
-function fmt(ts){ if(!ts) return ''; try{ return new Date(ts).toLocaleString(); }catch(e){ return String(ts); } }
-function escapeHtml(str){ if(typeof str!=='string') return str; return str.replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function fmt(ts){ if(!ts) return ""; try{ return new Date(ts).toLocaleString(); }catch(e){ return String(ts); } }
+function escapeHtml(str){ if(typeof str!=="string") return str; return str.replace(/[&<>\"']/g, m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m])); }
 
 async function renderApps(){
-  const { data, error } = await supabaseClient.from('apps').select('*').order('created_at',{ascending:false});
-  const tbody = document.getElementById('appsBody');
-  tbody.innerHTML='';
-  if(error){ tbody.innerHTML=`<tr><td colspan="10" style="color:red">${error.message}</td></tr>`; return; }
+  const { data, error } = await supabaseClient.from("apps").select("*").order("created_at",{ascending:false});
+  const tbody = document.getElementById("appsBody");
+  tbody.innerHTML = "";
+
+  if(error){
+    tbody.innerHTML = `<tr><td colspan="10" style="color:red">${error.message}</td></tr>`;
+    return;
+  }
 
   data.forEach(row=>{
-    const tr = document.createElement('tr');
+    const tr = document.createElement("tr");
 
-    let statusClass='status-unknown';
-    if(row.status==='active'||row.status==='live') statusClass='status-active';
-    if(row.status==='removed'||row.status==='down') statusClass='status-removed';
+    let statusClass = "status-unknown";
+    if (row.status === "active" || row.status === "live") statusClass = "status-active";
+    if (row.status === "removed" || row.status === "down") statusClass = "status-removed";
 
-    // Note 可编辑
-    const noteInput=document.createElement('input');
-    noteInput.className='note-input';
-    noteInput.value=row.note||'';
-    noteInput.addEventListener('change', async ()=>{
-      const { error } = await supabaseClient.from('apps').update({note:noteInput.value}).eq('id', row.id);
-      if(error) alert('Update note error: '+error.message);
+    const noteInput=document.createElement("input");
+    noteInput.value=row.note || "";
+    noteInput.style.width="120px";
+    noteInput.addEventListener("change", async ()=>{
+      const { error } = await supabaseClient.from("apps").update({note:noteInput.value}).eq("id", row.id);
+      if(error) alert("Update note error: "+error.message);
     });
 
-    tr.innerHTML=`
+    tr.innerHTML = `
       <td>${escapeHtml(row.package_name)}</td>
       <td>${fmt(row.created_at)}</td>
       <td>${fmt(row.first_seen)}</td>
       <td>${fmt(row.last_checked)}</td>
       <td>${fmt(row.removed_at)}</td>
-      <td>${escapeHtml(row.dev_id||'')}</td>
+      <td>${escapeHtml(row.dev_id||"")}</td>
       <td>${fmt(row.dev_banned_at)}</td>
-      <td class="${statusClass}">${escapeHtml(row.status||'unknown')}</td>
+      <td class="${statusClass}">${escapeHtml(row.status||"unknown")}</td>
       <td></td>
       <td></td>
     `;
-    tr.querySelector('td:nth-child(9)').appendChild(noteInput);
 
-    const delBtn=document.createElement('button');
-    delBtn.textContent='Delete';
-    delBtn.className='button-delete';
-    delBtn.addEventListener('click', async ()=>{
-      if(!confirm('Delete this app?')) return;
-      const { error }=await supabaseClient.from('apps').delete().eq('id', row.id);
-      if(error) alert('Delete error: '+error.message); else renderApps();
-    });
-    tr.querySelector('td:nth-child(10)').appendChild(delBtn);
+    tr.querySelector("td:nth-child(9)").appendChild(noteInput);
+
+    const delBtn=document.createElement("button");
+    delBtn.textContent="Delete";
+    delBtn.className="button-delete";
+    delBtn.onclick=async ()=>{
+      if(!confirm("Delete this app?")) return;
+      const { error }=await supabaseClient.from("apps").delete().eq("id", row.id);
+      if(error) alert("Delete error: "+error.message);
+      else renderApps();
+    };
+    tr.querySelector("td:nth-child(10)").appendChild(delBtn);
 
     tbody.appendChild(tr);
   });
 }
 
-document.getElementById('addBtn').addEventListener('click', async ()=>{
-  const pkg=document.getElementById('pkgInput').value.trim();
-  const note=document.getElementById('noteInput').value.trim();
-  const msgEl=document.getElementById('add-msg');
-  msgEl.textContent='';
-  if(!pkg){ alert('Please enter package name'); return; }
+document.getElementById("addBtn").onclick = async ()=>{
+  const pkg=document.getElementById("pkgInput").value.trim();
+  const note=document.getElementById("noteInput").value.trim();
+  const msgEl=document.getElementById("add-msg");
 
-  const { data, error } = await supabaseClient.from('apps').insert({
+  if(!pkg){
+    alert("Please enter package name");
+    return;
+  }
+
+  const { data, error } = await supabaseClient.from("apps").insert({
     package_name: pkg,
-    note: note||null,
-    status:'unknown',
+    note: note || null,
+    status:"unknown",
     created_at:new Date().toISOString()
   }).select().single();
 
-  if(error){ alert('Add app error: '+error.message); console.error(error); return; }
+  if(error){
+    alert("Add app error: "+error.message);
+    return;
+  }
 
-  document.getElementById('pkgInput').value='';
-  document.getElementById('noteInput').value='';
-  msgEl.textContent='Added.';
-  setTimeout(()=>msgEl.textContent='',2000);
+  document.getElementById("pkgInput").value="";
+  document.getElementById("noteInput").value="";
+  msgEl.textContent="Added.";
+  setTimeout(()=>msgEl.textContent="",2000);
   renderApps();
-});
+};
 
 renderApps();
+
+
+// ---------------- 可拖动列宽 ----------------
+document.querySelectorAll("th.resizable").forEach(th => {
+  const resizer = th.querySelector(".resizer");
+  let startX, startWidth;
+
+  resizer.addEventListener("mousedown", (e) => {
+    startX = e.pageX;
+    startWidth = th.offsetWidth;
+    document.documentElement.style.cursor = "col-resize";
+
+    const onMouseMove = (e) => {
+      const newWidth = startWidth + (e.pageX - startX);
+      th.style.width = newWidth + "px";
+    };
+
+    const onMouseUp = () => {
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+      document.documentElement.style.cursor = "";
+    };
+
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+  });
+});
 </script>
 </body>
 </html>
