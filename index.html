@@ -56,7 +56,6 @@ th, td {
   word-break: break-word;
 }
 
-/* ⭐ 整体缩小字体，美观显紧凑 */
 table td { font-size: 0.85rem; }
 
 th {
@@ -66,18 +65,15 @@ th {
   cursor: col-resize;
 }
 
-/* 状态颜色 */
 .status-active { color: #0a7f3b; font-weight: 600; }
 .status-removed { color: #c23b3b; font-weight: 600; }
 .status-unknown { color: #777; }
 
-/* 删除按钮 */
 .button-delete { background: #d9534f; }
 .button-delete:hover { background: #c9302c; }
 
 .small { color: #666; font-size: 0.9rem; }
 
-/* 可拖动列宽 */
 th.resizable { position: relative; }
 th.resizable .resizer {
   width: 6px;
@@ -89,13 +85,7 @@ th.resizable .resizer {
   user-select: none;
 }
 
-/* dev_id 和 note 可以更小字体 */
-td.dev-col, td.note-col {
-  font-size: 0.75rem;
-  word-break: break-word;
-}
-
-/* ⭐ 永不换行（只有需要的列） */
+td.dev-col, td.note-col { font-size: 0.75rem; word-break: break-word; }
 .nowrap { white-space: nowrap !important; }
 </style>
 </head>
@@ -114,14 +104,18 @@ td.dev-col, td.note-col {
 <table>
 <thead>
 <tr>
-<th class="resizable" data-col="package">Package<div class="resizer"></div></th>
+<th class="resizable" data-col="package_name">Package<div class="resizer"></div></th>
+<th class="resizable" data-col="app_name">App Name<div class="resizer"></div></th>
 <th class="resizable" data-col="created_at">Created At<div class="resizer"></div></th>
 <th class="resizable" data-col="first_seen">First Seen<div class="resizer"></div></th>
-<th class="resizable" data-col="last_checked">Last Checked<div class="resizer"></div></th>
+<th class="resizable" data-col="version">Version<div class="resizer"></div></th>
+<th class="resizable" data-col="update_time">Update Time<div class="resizer"></div></th>
 <th class="resizable" data-col="removed_at">Removed At<div class="resizer"></div></th>
+<th class="resizable" data-col="app_status">App Status<div class="resizer"></div></th>
 <th class="resizable" data-col="dev_id">Dev ID<div class="resizer"></div></th>
-<th class="resizable" data-col="dev_banned_at">Dev Banned<div class="resizer"></div></th>
-<th class="resizable" data-col="status">Status<div class="resizer"></div></th>
+<th class="resizable" data-col="dev_status">Dev Status<div class="resizer"></div></th>
+<th class="resizable" data-col="dev_banned_at">Dev Banned Time<div class="resizer"></div></th>
+<th class="resizable" data-col="last_checked">Last Checked<div class="resizer"></div></th>
 <th class="resizable" data-col="note">Note<div class="resizer"></div></th>
 <th class="resizable" data-col="actions">Actions<div class="resizer"></div></th>
 </tr>
@@ -134,7 +128,6 @@ td.dev-col, td.note-col {
 <script>
 const SUPABASE_URL = "https://sbmejkwmkpdaokvqkwnv.supabase.co";
 const SUPABASE_PUBLIC_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNibWVqa3dta3BkYW9rdnFrd252Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1OTU1OTAsImV4cCI6MjA4MDE3MTU5MH0.sWKZ7ePFp7_exkYioRHOkG8KYFtCouJr7ba-tV4iKy0";
-
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLIC_KEY);
 
 function fmt(ts){ if(!ts) return ""; try{ return new Date(ts).toLocaleString(); }catch(e){ return String(ts); } }
@@ -144,41 +137,48 @@ async function renderApps(){
   const { data, error } = await supabaseClient.from("apps").select("*").order("created_at",{ascending:false});
   const tbody = document.getElementById("appsBody");
   tbody.innerHTML = "";
-
   if(error){
-    tbody.innerHTML = `<tr><td colspan="10" style="color:red">${error.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="14" style="color:red">${error.message}</td></tr>`;
     return;
   }
 
   data.forEach(row=>{
     const tr = document.createElement("tr");
 
-    let statusClass = "status-unknown";
-    if (row.status === "active" || row.status === "live") statusClass = "status-active";
-    if (row.status === "removed" || row.status === "down") statusClass = "status-removed";
+    let appStatusClass = "status-unknown";
+    if(row.app_status==="active"||row.app_status==="live") appStatusClass="status-active";
+    if(row.app_status==="removed"||row.app_status==="down") appStatusClass="status-removed";
+
+    let devStatusClass="status-unknown";
+    if(row.dev_status==="active") devStatusClass="status-active";
+    if(row.dev_status==="removed") devStatusClass="status-removed";
 
     const noteInput=document.createElement("input");
-    noteInput.value=row.note || "";
+    noteInput.value=row.note||"";
     noteInput.style.width="100%";
     noteInput.addEventListener("change", async ()=>{
       const { error } = await supabaseClient.from("apps").update({note:noteInput.value}).eq("id", row.id);
       if(error) alert("Update note error: "+error.message);
     });
 
-    tr.innerHTML = `
+    tr.innerHTML=`
       <td>${escapeHtml(row.package_name)}</td>
+      <td>${escapeHtml(row.app_name||"")}</td>
       <td>${fmt(row.created_at)}</td>
       <td>${fmt(row.first_seen)}</td>
-      <td>${fmt(row.last_checked)}</td>
+      <td>${escapeHtml(row.version||"")}</td>
+      <td>${fmt(row.update_time)}</td>
       <td>${fmt(row.removed_at)}</td>
+      <td class="${appStatusClass} nowrap">${escapeHtml(row.app_status||"unknown")}</td>
       <td class="dev-col">${escapeHtml(row.dev_id||"")}</td>
+      <td class="${devStatusClass} nowrap">${escapeHtml(row.dev_status||"unknown")}</td>
       <td>${fmt(row.dev_banned_at)}</td>
-      <td class="${statusClass} nowrap">${escapeHtml(row.status||"unknown")}</td>
+      <td>${fmt(row.last_checked)}</td>
       <td class="note-col"></td>
       <td class="nowrap"></td>
     `;
 
-    tr.querySelector("td:nth-child(9)").appendChild(noteInput);
+    tr.querySelector("td:nth-child(13)").appendChild(noteInput);
 
     const delBtn=document.createElement("button");
     delBtn.textContent="Delete";
@@ -189,30 +189,26 @@ async function renderApps(){
       if(error) alert("Delete error: "+error.message);
       else renderApps();
     };
-    tr.querySelector("td:nth-child(10)").appendChild(delBtn);
+    tr.querySelector("td:nth-child(14)").appendChild(delBtn);
 
     tbody.appendChild(tr);
   });
 }
 
-document.getElementById("addBtn").onclick = async ()=>{
+document.getElementById("addBtn").onclick=async ()=>{
   const pkg=document.getElementById("pkgInput").value.trim();
   const note=document.getElementById("noteInput").value.trim();
   const msgEl=document.getElementById("add-msg");
-
   if(!pkg){ alert("Please enter package name"); return; }
 
   const { error } = await supabaseClient.from("apps").insert({
     package_name: pkg,
-    note: note || null,
-    status:"unknown",
+    note: note||null,
+    app_status:"unknown",
     created_at:new Date().toISOString()
   });
 
-  if(error){
-    alert("Add app error: "+error.message);
-    return;
-  }
+  if(error){ alert("Add app error: "+error.message); return; }
 
   document.getElementById("pkgInput").value="";
   document.getElementById("noteInput").value="";
@@ -223,65 +219,48 @@ document.getElementById("addBtn").onclick = async ()=>{
 
 renderApps();
 
-
 // -------------------- 可拖动列宽 + 记忆列宽 --------------------
-const tableKey = "app-monitor-col-widths";
-
-// 读取缓存
-function loadColumnWidths() {
-  const saved = localStorage.getItem(tableKey);
-  if (!saved) return;
-  const widths = JSON.parse(saved);
-
-  document.querySelectorAll("th.resizable").forEach(th => {
-    const key = th.dataset.col;
-    if (key && widths[key]) {
-      th.style.width = widths[key];
-    }
+const tableKey="app-monitor-col-widths";
+function loadColumnWidths(){
+  const saved=localStorage.getItem(tableKey);
+  if(!saved) return;
+  const widths=JSON.parse(saved);
+  document.querySelectorAll("th.resizable").forEach(th=>{
+    const key=th.dataset.col;
+    if(key && widths[key]) th.style.width=widths[key];
   });
 }
-
-// 保存缓存
-function saveColumnWidths() {
-  const widths = {};
-  document.querySelectorAll("th.resizable").forEach(th => {
-    const key = th.dataset.col;
-    if (key) widths[key] = th.style.width;
+function saveColumnWidths(){
+  const widths={};
+  document.querySelectorAll("th.resizable").forEach(th=>{
+    const key=th.dataset.col;
+    if(key) widths[key]=th.style.width;
   });
   localStorage.setItem(tableKey, JSON.stringify(widths));
 }
-
-// 启动列宽拖动
-document.querySelectorAll("th.resizable").forEach(th => {
-  const resizer = th.querySelector(".resizer");
-  const key = th.dataset.col;
-  if (!resizer || !key) return;
-
-  let startX, startWidth;
-
-  resizer.addEventListener("mousedown", (e) => {
-    startX = e.pageX;
-    startWidth = th.offsetWidth;
-    document.documentElement.style.cursor = "col-resize";
-
-    const onMouseMove = (e) => {
-      const newWidth = startWidth + (e.pageX - startX);
-      th.style.width = newWidth + "px";
+document.querySelectorAll("th.resizable").forEach(th=>{
+  const resizer=th.querySelector(".resizer");
+  const key=th.dataset.col;
+  if(!resizer||!key) return;
+  let startX,startWidth;
+  resizer.addEventListener("mousedown",(e)=>{
+    startX=e.pageX;
+    startWidth=th.offsetWidth;
+    document.documentElement.style.cursor="col-resize";
+    const onMouseMove=(e)=>{
+      const newWidth=startWidth+(e.pageX-startX);
+      th.style.width=newWidth+"px";
     };
-
-    const onMouseUp = () => {
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("mouseup", onMouseUp);
-      document.documentElement.style.cursor = "";
+    const onMouseUp=()=>{
+      document.removeEventListener("mousemove",onMouseMove);
+      document.removeEventListener("mouseup",onMouseUp);
+      document.documentElement.style.cursor="";
       saveColumnWidths();
     };
-
-    document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
+    document.addEventListener("mousemove",onMouseMove);
+    document.addEventListener("mouseup",onMouseUp);
   });
 });
-
-// 页面加载时恢复列宽
 loadColumnWidths();
 </script>
 </body>
