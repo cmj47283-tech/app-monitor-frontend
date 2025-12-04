@@ -1,176 +1,198 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
-<title>App Monitor</title>
+  <meta charset="UTF-8">
+  <title>App 监控面板</title>
 
-<!-- Supabase v2 CDN -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background-color: #f9f9f9;
+      color: #333;
+    }
 
-<style>
-body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial; padding: 20px; }
-.container { max-width: 1000px; margin: 0 auto; }
-input { padding: 6px; margin: 4px; }
-button { padding: 6px 12px; margin: 4px; cursor: pointer; }
-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-th { background: #f7f7f7; }
-.status-active { color: #0a7f3b; font-weight: 700; }
-.status-removed { color: #c23b3b; font-weight: 700; }
-.status-unknown { color: #777; }
-.row-note { width: 200px; }
-.small { color: #666; font-size: 0.9rem; }
-</style>
+    h2, h3 {
+      color: #444;
+    }
+
+    input, button {
+      padding: 6px 10px;
+      margin: 4px;
+      font-size: 14px;
+    }
+
+    button {
+      cursor: pointer;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+    }
+
+    button:hover {
+      background-color: #45a049;
+    }
+
+    .active { color: green; font-weight: bold; }
+    .removed { color: red; font-weight: bold; }
+    .unknown { color: gray; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      table-layout: fixed; /* 固定列宽 */
+      word-wrap: break-word; /* 单元格内容换行 */
+      background-color: white;
+      box-shadow: 0 0 5px rgba(0,0,0,0.1);
+    }
+
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background-color: #f2f2f2;
+      font-weight: bold;
+    }
+
+    td.note {
+      max-width: 200px; /* Note 列限制宽度 */
+      white-space: pre-wrap; /* 自动换行 */
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #app-panel {
+      margin-top: 20px;
+    }
+
+    .scrollable-table {
+      overflow-x: auto;
+    }
+  </style>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-<div class="container">
-  <h1>App Monitor</h1>
 
-  <div id="add-app-form">
-    <input id="pkgInput" placeholder="Package name e.g. com.example.app">
-    <input id="noteInput" placeholder="Note (optional)">
-    <button id="addBtn">Add App</button>
-    <span id="add-msg" class="small"></span>
+<h2>App 监控面板</h2>
+
+<div id="auth">
+  <input id="email" placeholder="Email">
+  <input id="password" placeholder="Password" type="password">
+  <button onclick="login()">登录</button>
+  <button onclick="signup()">注册</button>
+</div>
+
+<div id="app-panel" style="display:none">
+
+  <h3>添加 APP</h3>
+  <input id="pkg" placeholder="包名">
+  <input id="note" placeholder="备注">
+  <button onclick="addApp()">添加</button>
+
+  <h3>监控列表</h3>
+  <div class="scrollable-table">
+    <table id="list">
+      <thead>
+        <tr>
+          <th style="width: 150px;">包名</th>
+          <th style="width: 150px;">上架时间</th>
+          <th style="width: 150px;">下架时间</th>
+          <th style="width: 150px;">开发者封禁</th>
+          <th style="width: 100px;">状态</th>
+          <th style="width: 250px;">备注</th>
+          <th style="width: 80px;">删除</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
   </div>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Package</th>
-        <th>Created At</th>
-        <th>First Seen</th>
-        <th>Last Checked</th>
-        <th>Removed At</th>
-        <th>Dev ID</th>
-        <th>Dev Banned</th>
-        <th>Status</th>
-        <th class="row-note">Note</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-    <tbody id="appsBody"></tbody>
-  </table>
 </div>
 
 <script>
-/* --- 配置 Supabase --- */
-const SUPABASE_URL = "https://sbmejkwmkpdaokvqkwnv.supabase.co";
-const SUPABASE_PUBLIC_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNibWVqa3dta3BkYW9rdnFrd252Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1OTU1OTAsImV4cCI6MjA4MDE3MTU5MH0.sWKZ7ePFp7_exkYioRHOkG8KYFtCouJr7ba-tV4iKy0";
+const supabase = supabase.createClient("YOUR_SUPABASE_URL", "YOUR_PUBLIC_API_KEY");
 
-// 确认库加载
-if (typeof supabase === 'undefined') {
-  document.body.innerHTML = '<div style="padding:20px;color:crimson">Error: Supabase JS library not loaded.</div>';
-  throw new Error('Supabase JS library not loaded.');
+async function login() {
+  const email = document.getElementById("email").value;
+  const pass = document.getElementById("password").value;
+
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
+
+  if (!error) loadPanel();
 }
 
-// 创建客户端
-const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLIC_KEY);
+async function signup() {
+  const email = document.getElementById("email").value;
+  const pass = document.getElementById("password").value;
 
-// 日期格式化
-function fmt(ts) {
-  if (!ts) return '';
-  try { return new Date(ts).toLocaleString(); }
-  catch(e) { return String(ts); }
+  await supabase.auth.signUp({ email, password: pass });
+  alert("注册成功");
 }
 
-// 转义 HTML
-function escapeHtml(str) {
-  if (typeof str !== 'string') return str;
-  return str.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+async function loadPanel() {
+  document.getElementById("auth").style.display = "none";
+  document.getElementById("app-panel").style.display = "block";
+  refreshList();
 }
 
-// 渲染 apps 列表
-async function renderApps() {
-  const { data, error } = await supabaseClient
-    .from('apps')
-    .select('*')
-    .order('created_at', { ascending: false });
+async function addApp() {
+  const pkg = document.getElementById("pkg").value;
+  const note = document.getElementById("note").value;
 
-  const tbody = document.getElementById('appsBody');
-  tbody.innerHTML = '';
+  const user = (await supabase.auth.getUser()).data.user;
 
-  if (error) {
-    console.error('Fetch apps error:', error);
-    tbody.innerHTML = `<tr><td colspan="10" style="color:crimson">Error fetching apps: ${error.message}</td></tr>`;
-    return;
-  }
+  await supabase.from("apps").insert({
+    package_name: pkg,
+    note: note,
+    user_id: user.id
+  });
+
+  refreshList();
+}
+
+async function del(id) {
+  await supabase.from("apps").delete().eq("id", id);
+  refreshList();
+}
+
+async function refreshList() {
+  const tbody = document.querySelector("#list tbody");
+  tbody.innerHTML = "";
+
+  const user = (await supabase.auth.getUser()).data.user;
+
+  const { data } = await supabase.from("apps").select("*").eq("user_id", user.id);
 
   data.forEach(row => {
-    const tr = document.createElement('tr');
+    const tr = document.createElement("tr");
 
-    const status = row.status || 'unknown';
-    let statusClass = 'status-unknown';
-    if (status === 'active' || status === 'live') statusClass = 'status-active';
-    if (status === 'removed' || status === 'down') statusClass = 'status-removed';
-
-    // note 可编辑
-    const noteInput = document.createElement('input');
-    noteInput.value = row.note || '';
-    noteInput.style.width = '100%';
-    noteInput.addEventListener('change', async () => {
-      const { error } = await supabaseClient.from('apps').update({ note: noteInput.value }).eq('id', row.id);
-      if (error) alert('Update note error: ' + error.message);
-    });
+    const cls = row.status || "unknown";
 
     tr.innerHTML = `
-      <td>${escapeHtml(row.package_name)}</td>
-      <td>${fmt(row.created_at)}</td>
-      <td>${fmt(row.first_seen)}</td>
-      <td>${fmt(row.last_checked)}</td>
-      <td>${fmt(row.removed_at)}</td>
-      <td>${escapeHtml(row.dev_id || '')}</td>
-      <td>${row.dev_banned_at ? fmt(row.dev_banned_at) + ' (Banned)' : 'Active'}</td>
-      <td class="${statusClass}">${escapeHtml(status)}</td>
-      <td></td>
-      <td></td>
+      <td>${row.package_name}</td>
+      <td>${row.first_seen || ""}</td>
+      <td>${row.removed_at || ""}</td>
+      <td>${row.dev_banned_at || ""}</td>
+      <td class="${cls}">${cls}</td>
+      <td class="note">${row.note || ""}</td>
+      <td><button onclick="del('${row.id}')">删除</button></td>
     `;
-    tr.querySelector('td:nth-child(9)').appendChild(noteInput);
-
-    const delBtn = document.createElement('button');
-    delBtn.textContent = 'Delete';
-    delBtn.addEventListener('click', async () => {
-      if (!confirm('Delete this app?')) return;
-      const { error } = await supabaseClient.from('apps').delete().eq('id', row.id);
-      if (error) alert('Delete error: ' + error.message);
-      else renderApps();
-    });
-    tr.querySelector('td:nth-child(10)').appendChild(delBtn);
 
     tbody.appendChild(tr);
   });
 }
 
-// 添加 app
-document.getElementById('addBtn').addEventListener('click', async () => {
-  const pkg = document.getElementById('pkgInput').value.trim();
-  const note = document.getElementById('noteInput').value.trim();
-  const msgEl = document.getElementById('add-msg');
-  msgEl.textContent = '';
-
-  if (!pkg) { alert('Please enter package name'); return; }
-
-  const { data, error } = await supabaseClient.from('apps').insert({
-    package_name: pkg,
-    note: note || null,
-    status: 'unknown',
-    created_at: new Date().toISOString()
-  }).select().single();
-
-  if (error) {
-    alert('Add app error: ' + error.message);
-    console.error(error);
-    return;
-  }
-
-  document.getElementById('pkgInput').value = '';
-  document.getElementById('noteInput').value = '';
-  msgEl.textContent = 'Added.';
-  setTimeout(() => msgEl.textContent = '', 2000);
-  renderApps();
+supabase.auth.onAuthStateChange((event, session) => {
+  if (session) loadPanel();
 });
 
-// 初始加载
-renderApps();
 </script>
 </body>
 </html>
