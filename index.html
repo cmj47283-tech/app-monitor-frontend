@@ -6,18 +6,61 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
-body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial; padding: 20px; background: #f5f6fa; color: #333; }
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+  padding: 20px;
+  background: #f5f6fa;
+  color: #333;
+}
 .container { max-width: 1400px; margin: 0 auto; }
 h1 { margin-bottom: 16px; }
 
-input { padding: 6px 10px; margin: 4px; border-radius: 4px; border: 1px solid #ccc; }
-button { padding: 6px 12px; margin: 4px; cursor: pointer; border-radius: 4px; border: none; background: #4CAF50; color: #fff; transition: 0.2s; }
+input {
+  padding: 6px 10px;
+  margin: 4px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+}
+button {
+  padding: 6px 12px;
+  margin: 4px;
+  cursor: pointer;
+  border-radius: 4px;
+  border: none;
+  background: #4CAF50;
+  color: #fff;
+  transition: 0.2s;
+}
 button:hover { background: #45a049; }
 
-.table-wrapper { overflow-x: auto; background: #fff; padding: 10px; border-radius: 10px; box-shadow: 0 0 8px rgba(0,0,0,0.1); margin-top: 16px; }
-table { width: 100%; border-collapse: collapse; table-layout: auto; }
-th, td { border: 1px solid #ccc; padding: 8px; text-align: left; vertical-align: top; white-space: nowrap; }
-th { background: #f0f0f0; font-weight: bold; position: relative; }
+.table-wrapper {
+  overflow-x: auto;
+  background: #fff;
+  padding: 10px;
+  border-radius: 10px;
+  box-shadow: 0 0 8px rgba(0,0,0,0.1);
+  margin-top: 16px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+th, td {
+  border: 1px solid #ccc;
+  padding: 8px;
+  text-align: left;
+  vertical-align: top;
+  white-space: normal;     /* 允许换行 */
+  word-break: break-word;  /* 长字符自动换行 */
+}
+th {
+  background: #f0f0f0;
+  font-weight: bold;
+  position: relative;
+  cursor: col-resize;
+}
 
 .status-active { color: #0a7f3b; font-weight: 600; }
 .status-removed { color: #c23b3b; font-weight: 600; }
@@ -28,11 +71,8 @@ th { background: #f0f0f0; font-weight: bold; position: relative; }
 
 .small { color: #666; font-size: 0.9rem; }
 
-/* ------------ 可拖动列宽 ------------ */
-th.resizable {
-  position: relative;
-}
-
+/* 可拖动列宽 */
+th.resizable { position: relative; }
 th.resizable .resizer {
   width: 6px;
   height: 100%;
@@ -41,6 +81,13 @@ th.resizable .resizer {
   top: 0;
   cursor: col-resize;
   user-select: none;
+}
+
+/* 小字体列：dev_id、note */
+td.dev-col, td.note-col {
+  font-size: 0.85rem;
+  word-break: break-word;
+  white-space: normal;
 }
 </style>
 </head>
@@ -77,12 +124,8 @@ th.resizable .resizer {
 </div>
 
 <script>
-// ------------------ IMPORTANT ------------------
-// 这里替换你的 Supabase URL 和 PUBLIC KEY（必须是英文引号）
 const SUPABASE_URL = "https://sbmejkwmkpdaokvqkwnv.supabase.co";
-const SUPABASE_PUBLIC_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNibWVqa3dta3BkYW9rdnFrd252Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1OTU1OTAsImV4cCI6MjA4MDE3MTU5MH0.sWKZ7ePFp7_exkYioRHOkG8KYFtCouJr7ba-tV4iKy0";
-// ------------------------------------------------
-
+const SUPABASE_PUBLIC_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNibWVqa3dta3BkYW9rdnFrd252Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1OTU1OTAsImV4cCI6MjA4MDE3MTU5MH0.sWKZ7ePFp7_exkYioRHOkG8KYFtCouJr7ba-tV4iKy0"; // 填你自己的
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLIC_KEY);
 
 function fmt(ts){ if(!ts) return ""; try{ return new Date(ts).toLocaleString(); }catch(e){ return String(ts); } }
@@ -107,7 +150,7 @@ async function renderApps(){
 
     const noteInput=document.createElement("input");
     noteInput.value=row.note || "";
-    noteInput.style.width="120px";
+    noteInput.style.width="100%";
     noteInput.addEventListener("change", async ()=>{
       const { error } = await supabaseClient.from("apps").update({note:noteInput.value}).eq("id", row.id);
       if(error) alert("Update note error: "+error.message);
@@ -119,10 +162,10 @@ async function renderApps(){
       <td>${fmt(row.first_seen)}</td>
       <td>${fmt(row.last_checked)}</td>
       <td>${fmt(row.removed_at)}</td>
-      <td>${escapeHtml(row.dev_id||"")}</td>
+      <td class="dev-col">${escapeHtml(row.dev_id||"")}</td>
       <td>${fmt(row.dev_banned_at)}</td>
       <td class="${statusClass}">${escapeHtml(row.status||"unknown")}</td>
-      <td></td>
+      <td class="note-col"></td>
       <td></td>
     `;
 
@@ -148,10 +191,7 @@ document.getElementById("addBtn").onclick = async ()=>{
   const note=document.getElementById("noteInput").value.trim();
   const msgEl=document.getElementById("add-msg");
 
-  if(!pkg){
-    alert("Please enter package name");
-    return;
-  }
+  if(!pkg){ alert("Please enter package name"); return; }
 
   const { data, error } = await supabaseClient.from("apps").insert({
     package_name: pkg,
@@ -174,8 +214,7 @@ document.getElementById("addBtn").onclick = async ()=>{
 
 renderApps();
 
-
-// ---------------- 可拖动列宽 ----------------
+// -------------- 可拖动列宽 ----------------
 document.querySelectorAll("th.resizable").forEach(th => {
   const resizer = th.querySelector(".resizer");
   let startX, startWidth;
