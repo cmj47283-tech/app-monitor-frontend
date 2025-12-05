@@ -174,7 +174,7 @@ async function renderApps(){
       <td class="nowrap"></td>
     `;
 
-    tr.querySelector("td:nth-child(13)").appendChild(noteInput);
+    tr.querySelector("td:nth-child(11)").appendChild(noteInput);
 
     const delBtn=document.createElement("button");
     delBtn.textContent="Delete";
@@ -185,7 +185,7 @@ async function renderApps(){
       if(error) alert("Delete error: "+error.message);
       else renderApps();
     };
-    tr.querySelector("td:nth-child(14)").appendChild(delBtn);
+    tr.querySelector("td:nth-child(12)").appendChild(delBtn);
 
     tbody.appendChild(tr);
   });
