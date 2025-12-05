@@ -136,7 +136,7 @@ async function renderApps(){
   const tbody = document.getElementById("appsBody");
   tbody.innerHTML = "";
   if(error){
-    tbody.innerHTML = `<tr><td colspan="14" style="color:red">${error.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" style="color:red">${error.message}</td></tr>`;
     return;
   }
 
