@@ -108,8 +108,6 @@ td.dev-col, td.note-col { font-size: 0.75rem; word-break: break-word; }
 <th class="resizable" data-col="app_name">App Name<div class="resizer"></div></th>
 <th class="resizable" data-col="created_at">Created At<div class="resizer"></div></th>
 <th class="resizable" data-col="first_seen">First Seen<div class="resizer"></div></th>
-<th class="resizable" data-col="version">Version<div class="resizer"></div></th>
-<th class="resizable" data-col="update_time">Update Time<div class="resizer"></div></th>
 <th class="resizable" data-col="removed_at">Removed At<div class="resizer"></div></th>
 <th class="resizable" data-col="app_status">App Status<div class="resizer"></div></th>
 <th class="resizable" data-col="dev_id">Dev ID<div class="resizer"></div></th>
@@ -166,8 +164,6 @@ async function renderApps(){
       <td>${escapeHtml(row.app_name||"")}</td>
       <td>${fmt(row.created_at)}</td>
       <td>${fmt(row.first_seen)}</td>
-      <td>${escapeHtml(row.version||"")}</td>
-      <td>${fmt(row.update_time)}</td>
       <td>${fmt(row.removed_at)}</td>
       <td class="${appStatusClass} nowrap">${escapeHtml(row.app_status||"unknown")}</td>
       <td class="dev-col">${escapeHtml(row.dev_id||"")}</td>
